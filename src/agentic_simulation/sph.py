@@ -5,6 +5,11 @@ from typing import Any
 
 import numpy as np
 
+try:
+    from scipy.spatial import cKDTree
+except Exception:  # noqa: BLE001
+    cKDTree = None
+
 
 @dataclass(frozen=True)
 class SphWorldConfig:
@@ -156,6 +161,8 @@ def compute_density_pressure(
     scene: SphSceneConfig,
     mass: float,
 ) -> tuple[np.ndarray, np.ndarray, list[list[int]]]:
+    if cKDTree is not None:
+        return compute_density_pressure_pairs(positions, scene, mass)
     neighbors = build_neighbor_lists(positions, scene.solver.smoothing_length)
     h = scene.solver.smoothing_length
     densities = np.zeros(positions.shape[0], dtype=np.float64)
@@ -168,6 +175,26 @@ def compute_density_pressure(
     return densities, pressures, neighbors
 
 
+def compute_density_pressure_pairs(
+    positions: np.ndarray,
+    scene: SphSceneConfig,
+    mass: float,
+) -> tuple[np.ndarray, np.ndarray, list[list[int]]]:
+    h = scene.solver.smoothing_length
+    tree = cKDTree(positions)
+    pairs = np.asarray(list(tree.query_pairs(h)), dtype=np.int64)
+    densities = np.full(positions.shape[0], mass * poly6_kernel(0.0, h), dtype=np.float64)
+    if pairs.size:
+        diffs = positions[pairs[:, 0]] - positions[pairs[:, 1]]
+        r2 = np.sum(diffs * diffs, axis=1)
+        values = mass * poly6_kernel_array(r2, h)
+        np.add.at(densities, pairs[:, 0], values)
+        np.add.at(densities, pairs[:, 1], values)
+    densities = np.maximum(densities, 0.35 * scene.solver.rest_density)
+    pressures = scene.solver.gas_constant * np.maximum(densities - scene.solver.rest_density, 0.0)
+    return densities, pressures, [pairs]
+
+
 def compute_accelerations(
     positions: np.ndarray,
     velocities: np.ndarray,
@@ -177,6 +204,8 @@ def compute_accelerations(
     scene: SphSceneConfig,
     mass: float,
 ) -> np.ndarray:
+    if neighbors and isinstance(neighbors[0], np.ndarray):
+        return compute_accelerations_pairs(positions, velocities, densities, pressures, neighbors[0], scene, mass)
     h = scene.solver.smoothing_length
     acc = np.zeros_like(positions)
     for i, item_neighbors in enumerate(neighbors):
@@ -199,6 +228,48 @@ def compute_accelerations(
                 * viscosity_laplacian(r, h)
             )
         acc[i] = (pressure_force + viscosity_force) / densities[i]
+    return acc
+
+
+def compute_accelerations_pairs(
+    positions: np.ndarray,
+    velocities: np.ndarray,
+    densities: np.ndarray,
+    pressures: np.ndarray,
+    pairs: np.ndarray,
+    scene: SphSceneConfig,
+    mass: float,
+) -> np.ndarray:
+    acc = np.zeros_like(positions)
+    if pairs.size == 0:
+        return acc
+
+    h = scene.solver.smoothing_length
+    i = pairs[:, 0]
+    j = pairs[:, 1]
+    rij = positions[i] - positions[j]
+    r = np.linalg.norm(rij, axis=1)
+    valid = (r > 1.0e-12) & (r < h)
+    if not np.any(valid):
+        return acc
+
+    i = i[valid]
+    j = j[valid]
+    rij = rij[valid]
+    r = r[valid]
+
+    grad = spiky_gradient_array(rij, r, h)
+    pressure_scale_i = -mass * (pressures[i] + pressures[j]) / (2.0 * densities[j])
+    pressure_scale_j = -mass * (pressures[j] + pressures[i]) / (2.0 * densities[i])
+    pressure_i = pressure_scale_i[:, None] * grad
+    pressure_j = pressure_scale_j[:, None] * -grad
+
+    lap = viscosity_laplacian_array(r, h)
+    viscosity_i = scene.solver.viscosity * mass * (velocities[j] - velocities[i]) / densities[j, None] * lap[:, None]
+    viscosity_j = scene.solver.viscosity * mass * (velocities[i] - velocities[j]) / densities[i, None] * lap[:, None]
+
+    np.add.at(acc, i, (pressure_i + viscosity_i) / densities[i, None])
+    np.add.at(acc, j, (pressure_j + viscosity_j) / densities[j, None])
     return acc
 
 
@@ -249,14 +320,33 @@ def poly6_kernel(r2: float, h: float) -> float:
     return 315.0 / (64.0 * np.pi * h**9) * (h * h - r2) ** 3
 
 
+def poly6_kernel_array(r2: np.ndarray, h: float) -> np.ndarray:
+    values = np.zeros_like(r2, dtype=np.float64)
+    mask = r2 < h * h
+    values[mask] = 315.0 / (64.0 * np.pi * h**9) * (h * h - r2[mask]) ** 3
+    return values
+
+
 def spiky_gradient(rij: np.ndarray, r: float, h: float) -> np.ndarray:
     return -45.0 / (np.pi * h**6) * (h - r) ** 2 * rij / r
+
+
+def spiky_gradient_array(rij: np.ndarray, r: np.ndarray, h: float) -> np.ndarray:
+    scale = -45.0 / (np.pi * h**6) * (h - r) ** 2 / r
+    return scale[:, None] * rij
 
 
 def viscosity_laplacian(r: float, h: float) -> float:
     if r >= h:
         return 0.0
     return 45.0 / (np.pi * h**6) * (h - r)
+
+
+def viscosity_laplacian_array(r: np.ndarray, h: float) -> np.ndarray:
+    values = np.zeros_like(r, dtype=np.float64)
+    mask = r < h
+    values[mask] = 45.0 / (np.pi * h**6) * (h - r[mask])
+    return values
 
 
 def _require_mapping(data: dict[str, Any], key: str) -> dict[str, Any]:

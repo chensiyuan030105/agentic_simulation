@@ -134,6 +134,91 @@ def create_particle_objects(positions: np.ndarray, radius: float, material: bpy.
     return particles
 
 
+def create_particle_cloud_mesh(positions: np.ndarray, radius: float, material: bpy.types.Material) -> bpy.types.Object:
+    offsets, base_faces = _octahedron_particle_template(radius)
+    frame_count, particle_count = int(positions.shape[0]), int(positions.shape[1])
+    verts_per_particle = offsets.shape[0]
+
+    verts = (positions[0, :, None, :] + offsets[None, :, :]).reshape(-1, 3)
+    faces: list[tuple[int, int, int]] = []
+    for particle_idx in range(particle_count):
+        base = particle_idx * verts_per_particle
+        for face in base_faces:
+            faces.append((base + face[0], base + face[1], base + face[2]))
+
+    mesh = bpy.data.meshes.new("SPH_Particle_Cloud_Mesh")
+    mesh.from_pydata(verts.tolist(), [], faces)
+    mesh.update()
+    for polygon in mesh.polygons:
+        polygon.use_smooth = True
+
+    obj = bpy.data.objects.new("SPH_Particle_Cloud", mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.data.materials.append(material)
+
+    obj.shape_key_add(name="Basis", from_mix=False)
+    for frame_idx in range(1, frame_count):
+        key = obj.shape_key_add(name=f"F{frame_idx:04d}", from_mix=False)
+        coords = (positions[frame_idx, :, None, :] + offsets[None, :, :]).reshape(-1, 3).astype(np.float32)
+        key.data.foreach_set("co", coords.reshape(-1))
+    _animate_shape_keys(obj, frame_count=frame_count)
+    return obj
+
+
+def _octahedron_particle_template(radius: float) -> tuple[np.ndarray, tuple[tuple[int, int, int], ...]]:
+    r = float(radius)
+    offsets = np.asarray(
+        [
+            [r, 0.0, 0.0],
+            [-r, 0.0, 0.0],
+            [0.0, r, 0.0],
+            [0.0, -r, 0.0],
+            [0.0, 0.0, r],
+            [0.0, 0.0, -r],
+        ],
+        dtype=np.float32,
+    )
+    faces = (
+        (4, 0, 2),
+        (4, 2, 1),
+        (4, 1, 3),
+        (4, 3, 0),
+        (5, 2, 0),
+        (5, 1, 2),
+        (5, 3, 1),
+        (5, 0, 3),
+    )
+    return offsets, faces
+
+
+def _animate_shape_keys(obj: bpy.types.Object, frame_count: int) -> None:
+    shape_data = obj.data.shape_keys
+    if shape_data is None:
+        raise RuntimeError("SPH particle cloud has no shape keys")
+    if shape_data.animation_data:
+        shape_data.animation_data_clear()
+
+    keys = list(shape_data.key_blocks)[1:]
+    for key in keys:
+        key.value = 0.0
+
+    for idx, key in enumerate(keys, start=1):
+        peak = idx + 1
+        key.value = 0.0
+        key.keyframe_insert(data_path="value", frame=peak - 1)
+        key.value = 1.0
+        key.keyframe_insert(data_path="value", frame=peak)
+        if idx < len(keys):
+            key.value = 0.0
+            key.keyframe_insert(data_path="value", frame=peak + 1)
+        key.value = 0.0
+
+    if shape_data.animation_data and shape_data.animation_data.action:
+        for fcurve in _iter_action_fcurves(shape_data.animation_data.action):
+            for point in fcurve.keyframe_points:
+                point.interpolation = "LINEAR"
+
+
 def animate_particles(objects: list[bpy.types.Object], positions: np.ndarray) -> None:
     frame_count = int(positions.shape[0])
     for frame_idx in range(frame_count):
@@ -209,7 +294,9 @@ def main() -> None:
     style = config.get("sph_style", {}) if isinstance(config.get("sph_style", {}), dict) else {}
 
     bounds = tuple(float(v) for v in scene_payload["world"].get("bounds", [1.0, 1.0, 1.0]))
-    particle_radius = float(style.get("particle_radius", 0.024))
+    spacing = float(scene_payload.get("fluid", {}).get("particle_spacing", 0.05))
+    particle_radius = float(style.get("particle_radius", 0.45 * spacing))
+    object_threshold = int(style.get("object_particle_threshold", 1500))
 
     clear_scene()
     configure_render(config=config, video_out=video_out.expanduser().resolve(), frame_count=positions.shape[0])
@@ -218,8 +305,11 @@ def main() -> None:
     water_mat = make_principled_material("SPH_Water_Material", (0.05, 0.38, 0.78), alpha=0.72, roughness=0.12)
     create_floor(bounds, floor_mat)
     create_container(bounds, box_mat)
-    particles = create_particle_objects(positions, radius=particle_radius, material=water_mat)
-    animate_particles(particles, positions)
+    if positions.shape[1] <= object_threshold:
+        particles = create_particle_objects(positions, radius=particle_radius, material=water_mat)
+        animate_particles(particles, positions)
+    else:
+        create_particle_cloud_mesh(positions, radius=particle_radius, material=water_mat)
     add_lights()
     create_camera(
         config.get(

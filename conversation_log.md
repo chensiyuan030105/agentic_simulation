@@ -245,3 +245,68 @@ pressures: (120, 396)
 ```
 
 The Blender render visualizes the SPH particles as animated blue water spheres inside a 1x1x1 unit-box container. The MP4 was copied into `tmp/` for versioned sharing.
+
+## 028 | 2026-06-09 20:41:19 CST
+
+**User**
+
+挺好的，但是粒子数量太少了，模拟resolution开太大了
+
+**Assistant**
+
+Agreed with the diagnosis. The current default SPH config uses `particle_spacing: 0.065`, which is too coarse for a visually dense dam-break in a `1 x 1 x 1` box and produces only `396` particles. The next version should reduce the particle spacing to around `0.045` or `0.04`, increase the smoothing length consistently, and likely use a more efficient render path or fewer frames if needed so the higher particle count remains practical.
+
+## 029 | 2026-06-09 20:45:29 CST
+
+**User**
+
+能不能把粒子数目开到10000左右，在整体大小不发生改变的情况下，靠调整spacing和粒子半径
+
+**Assistant**
+
+Explained that around `10000` particles is feasible without changing the `1 x 1 x 1` domain, but the spacing needs to be reduced to about `0.020` for the current initial water block. A suitable starting configuration would be `particle_spacing: 0.020`, `smoothing_length: 0.030`, and Blender particle radius around `0.008-0.010`. Also noted that the current Python SPH solver and Blender renderer are not efficient enough for this scale as-is: simulation would be much slower, and the current renderer would create about `10000` animated objects and `1.2M` object-location keyframes for `120` frames. A 10000-particle version should therefore also switch the Blender path to mesh/point-cloud/Geometry-Nodes instancing instead of one object per particle.
+
+## 030 | 2026-06-09 20:50:27 CST
+
+**User**
+
+跑一下然后渲染一下
+
+**Assistant**
+
+Ran and rendered a high-resolution SPH dam-break case with about `10000` particles. Added a new config `configs/sim/sph_dambreak_10k.yaml` with `particle_spacing: 0.0205`, producing `10368` particles in the same `1 x 1 x 1` domain and same initial water-block scale. Optimized the SPH solver to use SciPy `cKDTree` neighbor pairs when available, and updated the Blender SPH renderer so high-particle-count runs use one combined particle-cloud mesh with shape keys instead of creating one animated Blender object per particle.
+
+Run outputs:
+
+```text
+outputs/runs/sph_dambreak_10k_001/particles.npz
+outputs/runs/sph_dambreak_10k_001/scene.blend
+outputs/runs/sph_dambreak_10k_001/preview.mp4
+tmp/sph_dambreak_10k_001_preview.mp4
+```
+
+Metrics:
+
+```text
+frames: 72
+particles: 10368
+positions: (72, 10368, 3)
+velocities: (72, 10368, 3)
+densities: (72, 10368)
+pressures: (72, 10368)
+outside bounds: 0
+max speed: 3.000000
+mean density: 946.136217
+```
+
+The MP4 was verified as a valid ISO MP4 and copied to `tmp/sph_dambreak_10k_001_preview.mp4`. The changes were left uncommitted because the user did not request commit/push for this turn.
+
+## 031 | 2026-06-09 21:33:30 CST
+
+**User**
+
+commit and push
+
+**Assistant**
+
+Committed and pushed the 10k SPH dam-break changes, including the high-resolution config, the `cKDTree` SPH neighbor optimization, the high-particle-count Blender mesh renderer, updated prompt/conversation logs, and `tmp/sph_dambreak_10k_001_preview.mp4`.
