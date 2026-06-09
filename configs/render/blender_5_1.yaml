@@ -1,4 +1,6 @@
-blender_executable: /path/to/blender-5.1/blender
+blender_executable: /ssd/data/ForSiyuan/tools/blender-5.1.0-linux-x64/blender
+library_paths:
+  - /ssd/data/anaconda3/lib
 engine: EEVEE
 fps: 24
 width: 1920

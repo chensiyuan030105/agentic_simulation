@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +45,10 @@ def main() -> None:
             "Pass --blender /path/to/blender-5.1/blender or update the render config."
         )
 
+    run_dir = args.run_dir.expanduser().resolve()
+    runtime_config_path = run_dir / "render_config.runtime.json"
+    runtime_config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+
     command = [
         str(blender_path),
         "--background",
@@ -53,17 +59,24 @@ def main() -> None:
         str(REPO_ROOT / "blender" / "render_scene.py"),
         "--",
         "--config",
-        str(config_path),
+        str(runtime_config_path),
         "--run",
-        str(args.run_dir.expanduser().resolve()),
+        str(run_dir),
     ]
     if args.video_out is not None:
         command.extend(["--video-out", str(args.video_out.expanduser().resolve())])
     if args.blend_out is not None:
         command.extend(["--blend-out", str(args.blend_out.expanduser().resolve())])
 
+    env = os.environ.copy()
+    library_paths = config.get("library_paths", [])
+    if isinstance(library_paths, list) and library_paths:
+        existing = env.get("LD_LIBRARY_PATH", "")
+        resolved_paths = [str(Path(str(path)).expanduser().resolve()) for path in library_paths]
+        env["LD_LIBRARY_PATH"] = ":".join([*resolved_paths, existing] if existing else resolved_paths)
+
     print("[run]", " ".join(command))
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, env=env)
 
 
 def _is_path_command(path: Path) -> bool:

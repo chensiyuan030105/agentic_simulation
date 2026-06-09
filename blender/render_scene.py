@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -33,15 +34,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args(_argv_after_double_dash())
 
 
-def load_yaml(path: Path) -> dict:
+def load_config(path: Path) -> dict:
+    if path.suffix.lower() == ".json":
+        return read_json(path)
     try:
         import yaml
     except Exception as exc:  # noqa: BLE001
-        raise ImportError("PyYAML is required inside Blender's Python environment.") from exc
+        raise ImportError(
+            "PyYAML is required for YAML configs inside Blender. "
+            "Use scripts/render_run.py so the YAML is converted to JSON first."
+        ) from exc
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle)
     if not isinstance(data, dict):
-        raise ValueError(f"Expected YAML mapping in {path}")
+        raise ValueError(f"Expected config mapping in {path}")
     return data
 
 
@@ -60,10 +66,16 @@ def configure_render(config: dict, run_dir: Path, video_out: Path) -> None:
     scene.render.film_transparent = False
 
     engine = str(config.get("engine", "EEVEE")).upper()
-    scene.render.engine = "BLENDER_EEVEE_NEXT" if engine == "EEVEE" else "CYCLES"
+    available_engines = {item.identifier for item in scene.render.bl_rna.properties["engine"].enum_items}
+    if engine == "EEVEE":
+        scene.render.engine = "BLENDER_EEVEE_NEXT" if "BLENDER_EEVEE_NEXT" in available_engines else "BLENDER_EEVEE"
+    else:
+        scene.render.engine = "CYCLES"
 
     video_out.parent.mkdir(parents=True, exist_ok=True)
     scene.render.filepath = str(video_out.with_suffix(""))
+    if hasattr(scene.render.image_settings, "media_type"):
+        scene.render.image_settings.media_type = "VIDEO"
     scene.render.image_settings.file_format = "FFMPEG"
     scene.render.ffmpeg.format = "MPEG4"
     scene.render.ffmpeg.codec = "H264"
@@ -155,14 +167,47 @@ def set_linear_interpolation() -> None:
         anim = obj.animation_data
         if anim is None or anim.action is None:
             continue
-        for fcurve in anim.action.fcurves:
+        for fcurve in _iter_action_fcurves(anim.action):
             for point in fcurve.keyframe_points:
                 point.interpolation = "LINEAR"
 
 
+def _iter_action_fcurves(action_data):
+    if hasattr(action_data, "fcurves"):
+        for fcurve in action_data.fcurves:
+            yield fcurve
+        return
+
+    if not hasattr(action_data, "layers"):
+        return
+    for layer in action_data.layers:
+        for strip in layer.strips:
+            if hasattr(strip, "channelbags"):
+                bags = strip.channelbags
+            elif hasattr(strip, "channelbag") and strip.channelbag is not None:
+                bags = (strip.channelbag,)
+            else:
+                bags = ()
+            for bag in bags:
+                for fcurve in bag.fcurves:
+                    yield fcurve
+
+
+def _normalize_video_output(video_out: Path) -> None:
+    """Move Blender's frame-range video name to the requested stable path."""
+    candidates = sorted(video_out.parent.glob(f"{video_out.stem}*.{video_out.suffix.lstrip('.')}"))
+    candidates = [path for path in candidates if path != video_out]
+    if not candidates:
+        return
+    newest = max(candidates, key=lambda path: path.stat().st_mtime)
+    if video_out.exists():
+        video_out.unlink()
+    shutil.move(str(newest), str(video_out))
+
+
 def main() -> None:
     args = parse_args()
-    config = load_yaml(args.config.expanduser().resolve())
+    config = load_config(args.config.expanduser().resolve())
     run_dir = args.run.expanduser().resolve()
     scene_payload = read_json(run_dir / "scene.json")
     with np.load(run_dir / "trajectories.npz") as bundle:
@@ -186,6 +231,7 @@ def main() -> None:
         bpy.ops.wm.save_as_mainfile(filepath=str(blend_out.expanduser().resolve()))
     if bool(output_cfg.get("render_mp4", True)):
         bpy.ops.render.render(animation=True)
+        _normalize_video_output(video_out.expanduser().resolve())
 
     print("render complete")
     print(f"run_dir  : {run_dir}")

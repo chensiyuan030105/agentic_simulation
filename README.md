@@ -4,9 +4,21 @@ This workspace is intended for building agent-driven simulation scenes and rende
 
 ## Current Status
 
-The first deterministic demo is implemented. It simulates four sphere agents moving in a 2D arena with circular obstacles, goal seeking, obstacle avoidance, and inter-agent separation. The simulation writes a structured run bundle that can be inspected from Python and rendered by Blender 5.1 when a Blender executable is available.
+The first deterministic demo is implemented. It simulates four sphere agents moving in a 2D arena with circular obstacles, goal seeking, obstacle avoidance, and inter-agent separation. The simulation writes a structured run bundle that can be inspected from Python and rendered by Blender 5.1.
 
-Blender is not currently available on this machine through `blender` in `PATH`, so the simulation side has been validated locally and the render script is prepared for Blender 5.1 execution once `blender_executable` is set.
+Blender 5.1.0 has been downloaded and validated at:
+
+```text
+/ssd/data/ForSiyuan/tools/blender-5.1.0-linux-x64/blender
+```
+
+The local system was missing `libxkbcommon.so.0`, so the render config prepends Anaconda's library directory through `LD_LIBRARY_PATH`:
+
+```text
+/ssd/data/anaconda3/lib
+```
+
+The demo has been rendered successfully once, producing `scene.blend` and `preview.mp4` under `outputs/runs/demo_001/`.
 
 ## Quick Start
 
@@ -39,12 +51,18 @@ velocities    (240, 4, 3)
 actions       (240, 4, 4)
 ```
 
-Render with Blender 5.1 after updating `configs/render/blender_5_1.yaml` or passing `--blender`:
+Render with Blender 5.1:
 
 ```bash
 python scripts/render_run.py outputs/runs/demo_001 \
-  --config configs/render/blender_5_1.yaml \
-  --blender /path/to/blender-5.1/blender
+  --config configs/render/blender_5_1.yaml
+```
+
+The configured render output is:
+
+```text
+outputs/runs/demo_001/scene.blend
+outputs/runs/demo_001/preview.mp4
 ```
 
 ## Core Idea
@@ -277,21 +295,25 @@ For later versions:
 ## Render Config Shape
 
 ```yaml
-blender_executable: /path/to/blender-5.1/blender
+blender_executable: /ssd/data/ForSiyuan/tools/blender-5.1.0-linux-x64/blender
+library_paths:
+  - /ssd/data/anaconda3/lib
 engine: EEVEE
 fps: 24
 width: 1920
 height: 1080
 
 camera:
-  mode: orbit
+  mode: fixed
+  location: [0.0, -18.0, 15.0]
   target: [0, 0, 0]
-  distance: 18
-  elevation: 55
+  focal_length: 45.0
 
 output:
   save_blend: true
   render_mp4: true
+  blend_name: scene.blend
+  video_name: preview.mp4
 ```
 
 ## Engineering Rules
@@ -316,7 +338,7 @@ Completed:
 
 Next:
 
-1. Install or configure Blender 5.1 and run the first actual render.
+1. Improve the first rendered scene visually after inspecting `preview.mp4`.
 2. Add richer policies, obstacles, and interactions.
 3. Add optional image-sequence rendering for debugging.
 4. Add camera presets and visual style presets.
