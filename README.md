@@ -2,6 +2,51 @@
 
 This workspace is intended for building agent-driven simulation scenes and rendering them with Blender 5.1. The first goal is not to implement a complex simulator immediately, but to establish a clean pipeline that separates simulation, data export, and rendering.
 
+## Current Status
+
+The first deterministic demo is implemented. It simulates four sphere agents moving in a 2D arena with circular obstacles, goal seeking, obstacle avoidance, and inter-agent separation. The simulation writes a structured run bundle that can be inspected from Python and rendered by Blender 5.1 when a Blender executable is available.
+
+Blender is not currently available on this machine through `blender` in `PATH`, so the simulation side has been validated locally and the render script is prepared for Blender 5.1 execution once `blender_executable` is set.
+
+## Quick Start
+
+Install the small Python-side dependency set:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the demo simulation:
+
+```bash
+python scripts/run_sim.py \
+  --config configs/sim/basic_scene.yaml \
+  --out outputs/runs/demo_001
+```
+
+Inspect the generated run bundle:
+
+```bash
+python scripts/inspect_run.py outputs/runs/demo_001
+```
+
+Expected array shapes:
+
+```text
+positions     (240, 4, 3)
+orientations  (240, 4, 4)
+velocities    (240, 4, 3)
+actions       (240, 4, 4)
+```
+
+Render with Blender 5.1 after updating `configs/render/blender_5_1.yaml` or passing `--blender`:
+
+```bash
+python scripts/render_run.py outputs/runs/demo_001 \
+  --config configs/render/blender_5_1.yaml \
+  --blender /path/to/blender-5.1/blender
+```
+
 ## Core Idea
 
 The project should be split into two independent layers:
@@ -41,7 +86,7 @@ python scripts/run_sim.py \
   --run outputs/runs/demo_001
 ```
 
-Blender is not currently available on this machine through `blender` in `PATH`, so the executable path should be configurable rather than hard-coded.
+The executable path is intentionally configurable rather than hard-coded.
 
 ## Proposed Directory Layout
 
@@ -70,6 +115,7 @@ agentic_simulation/
   scripts/
     run_sim.py
     inspect_run.py
+    render_run.py
 
   blender/
     render_scene.py
@@ -157,9 +203,9 @@ Useful fields:
 }
 ```
 
-## First Demo Recommendation
+## Implemented First Demo
 
-The first implementation should avoid complex physics. A robust starter scene is:
+The implemented starter scene intentionally avoids complex physics. It contains:
 
 - A flat 2D arena represented in 3D.
 - Multiple sphere or capsule agents.
@@ -169,7 +215,7 @@ The first implementation should avoid complex physics. A robust starter scene is
 - Colored path trails in Blender.
 - One orbit or angled camera view.
 
-This is enough to validate the full simulation-to-render pipeline without being blocked by rigid-body contact, mesh deformation, or external simulators.
+This is enough to validate the full simulation-to-render pipeline without being blocked by rigid-body contact, mesh deformation, or external simulators. The current policy combines goal seeking, circular obstacle avoidance, inter-agent separation, boundary clamping, and velocity damping.
 
 ## Simulation Module Responsibilities
 
@@ -258,13 +304,20 @@ output:
 - Save enough metadata to reproduce each run.
 - Start with a simple deterministic demo before adding physics or learned policies.
 
-## Suggested Implementation Order
+## Suggested Next Implementation Order
+
+Completed:
 
 1. Add config files and Python package skeleton.
 2. Implement a simple arena scene and deterministic agent policy.
-3. Export `scene.json` and `trajectories.npz`.
+3. Export `scene.json`, `trajectories.npz`, `events.jsonl`, `metrics.json`, and `manifest.json`.
 4. Implement a Blender script that can render those outputs.
 5. Add a run manifest and basic metrics.
-6. Add richer policies, obstacles, and interactions.
-7. Add more advanced rendering and optional physics engines.
 
+Next:
+
+1. Install or configure Blender 5.1 and run the first actual render.
+2. Add richer policies, obstacles, and interactions.
+3. Add optional image-sequence rendering for debugging.
+4. Add camera presets and visual style presets.
+5. Add more advanced rendering and optional physics engines.

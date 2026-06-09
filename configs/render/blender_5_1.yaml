@@ -1,0 +1,24 @@
+blender_executable: /path/to/blender-5.1/blender
+engine: EEVEE
+fps: 24
+width: 1920
+height: 1080
+
+camera:
+  mode: fixed
+  location: [0.0, -18.0, 15.0]
+  target: [0.0, 0.0, 0.0]
+  focal_length: 45.0
+
+style:
+  show_trails: true
+  trail_width: 0.035
+  ground_color: [0.82, 0.84, 0.86]
+  obstacle_color: [0.16, 0.16, 0.18]
+  goal_color: [0.95, 0.95, 0.95]
+
+output:
+  save_blend: true
+  render_mp4: true
+  blend_name: scene.blend
+  video_name: preview.mp4
