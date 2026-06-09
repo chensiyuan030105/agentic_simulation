@@ -1,0 +1,23 @@
+run_name: sph_dambreak_001
+seed: 23
+
+world:
+  bounds: [1.0, 1.0, 1.0]
+  frames: 120
+  fps: 24
+  dt: 0.0015
+  substeps_per_frame: 4
+
+fluid:
+  particle_spacing: 0.065
+  initial_block_min: [0.08, 0.08, 0.08]
+  initial_block_max: [0.42, 0.72, 0.42]
+
+solver:
+  rest_density: 1000.0
+  smoothing_length: 0.09
+  gas_constant: 55.0
+  viscosity: 0.035
+  gravity: [0.0, 0.0, -9.81]
+  boundary_damping: 0.45
+  max_velocity: 3.0

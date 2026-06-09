@@ -8,6 +8,8 @@ The first deterministic agent demo is implemented. It simulates four sphere agen
 
 A second independent fluid demo is also implemented. It uses a deterministic 2D height-field wave solver with circular solid obstacles, exports dense water fields, computes mass-conservation metrics, and renders the animated water surface in Blender with shape keys.
 
+A third SPH dam-break demo is implemented for a `1 x 1 x 1` box. It uses a small deterministic CPU WCSPH-style particle simulator, exports particle trajectories, and renders the particles as animated water spheres in Blender.
+
 Blender 5.1.0 has been downloaded and validated at:
 
 ```text
@@ -20,7 +22,7 @@ The local system was missing `libxkbcommon.so.0`, so the render config prepends 
 /ssd/data/anaconda3/lib
 ```
 
-The agent demo has been rendered successfully once, producing `scene.blend` and `preview.mp4` under `outputs/runs/demo_001/`. The fluid demo produces the same render artifact names under `outputs/runs/fluid_001/`.
+The agent demo has been rendered successfully once, producing `scene.blend` and `preview.mp4` under `outputs/runs/demo_001/`. The fluid and SPH demos produce the same render artifact names under `outputs/runs/fluid_001/` and `outputs/runs/sph_dambreak_001/`.
 
 ## Quick Start
 
@@ -107,6 +109,47 @@ outputs/runs/fluid_001/preview.mp4
 
 The current fluid solver is a visual height-field wave model, not a full Navier-Stokes solver. It applies a per-step free-surface mass correction so the discrete total water height remains stable. In the default scene, the inspected mass range is about `6.35e-07`, with relative range about `3.59e-08`.
 
+## SPH Dam-Break Demo
+
+Run the SPH simulation:
+
+```bash
+python scripts/run_sph.py \
+  --config configs/sim/sph_dambreak.yaml \
+  --out outputs/runs/sph_dambreak_001
+```
+
+Inspect the generated run bundle:
+
+```bash
+python scripts/inspect_sph.py outputs/runs/sph_dambreak_001
+```
+
+Expected array shapes for the default run:
+
+```text
+positions   (120, 396, 3)
+velocities  (120, 396, 3)
+densities   (120, 396)
+pressures   (120, 396)
+```
+
+Render with Blender 5.1:
+
+```bash
+python scripts/render_sph_run.py outputs/runs/sph_dambreak_001 \
+  --config configs/render/blender_5_1.yaml
+```
+
+The configured SPH render output is:
+
+```text
+outputs/runs/sph_dambreak_001/scene.blend
+outputs/runs/sph_dambreak_001/preview.mp4
+```
+
+The current SPH solver is a compact CPU implementation intended for scene prototyping, not a production fluid solver. It uses uniform-grid neighbor search, Poly6 density estimation, Spiky pressure forces, viscosity, gravity, and damped collision against the six walls of the unit box. The default run has `396` particles, `120` frames, and no out-of-bounds particles.
+
 ## Core Idea
 
 The project should be split into two independent layers:
@@ -137,6 +180,12 @@ Fluid YAML config
   -> fluid_scene.json + fields.npz + events.jsonl + metrics.json
   -> Blender 5.1 background render
   -> scene.blend + preview.mp4 + optional frames
+
+SPH YAML config
+  -> Python WCSPH-style particle simulation
+  -> sph_scene.json + particles.npz + events.jsonl + metrics.json
+  -> Blender 5.1 background render
+  -> scene.blend + preview.mp4 + optional frames
 ```
 
 Example command shape:
@@ -165,6 +214,7 @@ agentic_simulation/
     sim/
       basic_scene.yaml
       fluid_scene.yaml
+      sph_dambreak.yaml
     render/
       blender_5_1.yaml
 
@@ -181,6 +231,9 @@ agentic_simulation/
       fluid.py
       fluid_io.py
       fluid_metrics.py
+      sph.py
+      sph_io.py
+      sph_metrics.py
 
   scripts/
     run_sim.py
@@ -189,10 +242,14 @@ agentic_simulation/
     run_fluid.py
     inspect_fluid.py
     render_fluid_run.py
+    run_sph.py
+    inspect_sph.py
+    render_sph_run.py
 
   blender/
     render_scene.py
     render_fluid.py
+    render_sph.py
     materials.py
     camera.py
     geometry.py
@@ -263,6 +320,21 @@ Stores dense per-frame fluid arrays.
 height:    (T, H, W)  # water surface displacement
 velocity:  (T, H, W)  # estimated vertical velocity
 mask:      (H, W)     # solid obstacle cells
+```
+
+### `sph_scene.json`
+
+Stores static SPH scene information: unit-box bounds, frame settings, initial water block, particle spacing, and solver parameters.
+
+### `particles.npz`
+
+Stores dense per-frame SPH particle arrays.
+
+```text
+positions:   (T, N, 3)
+velocities:  (T, N, 3)
+densities:   (T, N)
+pressures:   (T, N)
 ```
 
 ### `events.jsonl`
