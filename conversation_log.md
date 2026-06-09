@@ -310,3 +310,78 @@ commit and push
 **Assistant**
 
 Committed and pushed the 10k SPH dam-break changes, including the high-resolution config, the `cKDTree` SPH neighbor optimization, the high-particle-count Blender mesh renderer, updated prompt/conversation logs, and `tmp/sph_dambreak_10k_001_preview.mp4`.
+
+## 032 | 2026-06-09 21:56:20 CST
+
+**User**
+
+现在跑了多少帧
+
+**Assistant**
+
+Checked `outputs/runs/sph_dambreak_10k_001` with `scripts/inspect_sph.py`. The 10k SPH run has `72` frames at `24` fps, so the rendered animation is `3` seconds long. The particle arrays have shape `positions: (72, 10368, 3)` and `velocities: (72, 10368, 3)`.
+
+## 033 | 2026-06-09 22:07:14 CST
+
+**User**
+
+跑600帧
+
+**Assistant**
+
+Created `configs/sim/sph_dambreak_10k_600.yaml` and ran a 600-frame 10k-particle SPH simulation without rendering. The run output is under `outputs/runs/sph_dambreak_10k_600`.
+
+Metrics:
+
+```text
+frames: 600
+fps: 24
+particles: 10368
+positions: (600, 10368, 3)
+velocities: (600, 10368, 3)
+densities: (600, 10368)
+pressures: (600, 10368)
+outside bounds: 0
+max speed: 3.000000
+mean density: 859.648075
+```
+
+The simulation was completed and inspected successfully. The 600-frame Blender render was not run in this turn.
+
+## 034 | 2026-06-09 22:17:48 CST
+
+**User**
+
+跑完了？渲染也结束了？
+
+**Assistant**
+
+Checked `outputs/runs/sph_dambreak_10k_600`. The 600-frame simulation completed successfully and produced `particles.npz`, `sph_scene.json`, `metrics.json`, `manifest.json`, and `events.jsonl`. The 600-frame Blender render had not been run yet; there was no `preview.mp4` or `scene.blend` in that run directory.
+
+## 035 | 2026-06-09 22:20:04 CST
+
+**User**
+
+渲染啊，出mp4
+
+**Assistant**
+
+Rendered the 600-frame 10k-particle SPH run with Blender 5.1. The render completed all `600/600` frames and produced:
+
+```text
+outputs/runs/sph_dambreak_10k_600/preview.mp4
+outputs/runs/sph_dambreak_10k_600/scene.blend
+tmp/sph_dambreak_10k_600_preview.mp4
+```
+
+The MP4 was verified as a valid ISO MP4. File sizes were about `41M` for the MP4 and `210M` for the `.blend` file.
+
+## 036 | 2026-06-09 23:29:03 CST
+
+**User**
+
+commit and push
+
+**Assistant**
+
+Committed and pushed the 600-frame 10k SPH configuration, prompt/conversation logs, and `tmp/sph_dambreak_10k_600_preview.mp4`. The large generated files under `outputs/runs/sph_dambreak_10k_600/` remained ignored by git.
