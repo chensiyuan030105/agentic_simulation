@@ -1,0 +1,36 @@
+run_name: fluid_001
+seed: 11
+
+world:
+  grid: [96, 96]
+  extent: [10.0, 10.0]
+  frames: 180
+  fps: 24
+  dt: 0.025
+
+solver:
+  wave_speed: 2.4
+  damping: 0.012
+  height_clip: 0.55
+
+initial_disturbances:
+  - id: center_pulse
+    type: gaussian
+    center: [-2.8, -1.8]
+    amplitude: 0.42
+    sigma: 0.55
+  - id: side_pulse
+    type: gaussian
+    center: [3.2, 2.6]
+    amplitude: -0.25
+    sigma: 0.8
+
+obstacles:
+  - id: post_left
+    type: circle
+    center: [-1.0, 1.2]
+    radius: 0.7
+  - id: post_right
+    type: circle
+    center: [2.0, -1.1]
+    radius: 0.85

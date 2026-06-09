@@ -4,7 +4,9 @@ This workspace is intended for building agent-driven simulation scenes and rende
 
 ## Current Status
 
-The first deterministic demo is implemented. It simulates four sphere agents moving in a 2D arena with circular obstacles, goal seeking, obstacle avoidance, and inter-agent separation. The simulation writes a structured run bundle that can be inspected from Python and rendered by Blender 5.1.
+The first deterministic agent demo is implemented. It simulates four sphere agents moving in a 2D arena with circular obstacles, goal seeking, obstacle avoidance, and inter-agent separation. The simulation writes a structured run bundle that can be inspected from Python and rendered by Blender 5.1.
+
+A second independent fluid demo is also implemented. It uses a deterministic 2D height-field wave solver with circular solid obstacles, exports dense water fields, computes mass-conservation metrics, and renders the animated water surface in Blender with shape keys.
 
 Blender 5.1.0 has been downloaded and validated at:
 
@@ -18,7 +20,7 @@ The local system was missing `libxkbcommon.so.0`, so the render config prepends 
 /ssd/data/anaconda3/lib
 ```
 
-The demo has been rendered successfully once, producing `scene.blend` and `preview.mp4` under `outputs/runs/demo_001/`.
+The agent demo has been rendered successfully once, producing `scene.blend` and `preview.mp4` under `outputs/runs/demo_001/`. The fluid demo produces the same render artifact names under `outputs/runs/fluid_001/`.
 
 ## Quick Start
 
@@ -65,6 +67,46 @@ outputs/runs/demo_001/scene.blend
 outputs/runs/demo_001/preview.mp4
 ```
 
+## Fluid Demo
+
+Run the fluid simulation:
+
+```bash
+python scripts/run_fluid.py \
+  --config configs/sim/fluid_scene.yaml \
+  --out outputs/runs/fluid_001
+```
+
+Inspect the generated run bundle and conservation metrics:
+
+```bash
+python scripts/inspect_fluid.py outputs/runs/fluid_001
+```
+
+Expected array shapes:
+
+```text
+height    (180, 96, 96)
+velocity  (180, 96, 96)
+mask      (96, 96)
+```
+
+Render the water surface with Blender 5.1:
+
+```bash
+python scripts/render_fluid_run.py outputs/runs/fluid_001 \
+  --config configs/render/blender_5_1.yaml
+```
+
+The configured fluid render output is:
+
+```text
+outputs/runs/fluid_001/scene.blend
+outputs/runs/fluid_001/preview.mp4
+```
+
+The current fluid solver is a visual height-field wave model, not a full Navier-Stokes solver. It applies a per-step free-surface mass correction so the discrete total water height remains stable. In the default scene, the inspected mass range is about `6.35e-07`, with relative range about `3.59e-08`.
+
 ## Core Idea
 
 The project should be split into two independent layers:
@@ -84,9 +126,15 @@ This separation keeps the project reproducible and makes it easier to swap polic
 ## Recommended Pipeline
 
 ```text
-YAML config
-  -> Python simulation
+Agent YAML config
+  -> Python agent simulation
   -> scene.json + trajectories.npz + events.jsonl + metrics.json
+  -> Blender 5.1 background render
+  -> scene.blend + preview.mp4 + optional frames
+
+Fluid YAML config
+  -> Python height-field simulation
+  -> fluid_scene.json + fields.npz + events.jsonl + metrics.json
   -> Blender 5.1 background render
   -> scene.blend + preview.mp4 + optional frames
 ```
@@ -116,6 +164,7 @@ agentic_simulation/
   configs/
     sim/
       basic_scene.yaml
+      fluid_scene.yaml
     render/
       blender_5_1.yaml
 
@@ -129,14 +178,21 @@ agentic_simulation/
       simulation.py
       io.py
       metrics.py
+      fluid.py
+      fluid_io.py
+      fluid_metrics.py
 
   scripts/
     run_sim.py
     inspect_run.py
     render_run.py
+    run_fluid.py
+    inspect_fluid.py
+    render_fluid_run.py
 
   blender/
     render_scene.py
+    render_fluid.py
     materials.py
     camera.py
     geometry.py
@@ -193,6 +249,20 @@ positions:     (T, A, 3)
 orientations:  (T, A, 4)  # quaternion, optional for simple sphere agents
 actions:       (T, A, K)  # optional policy/action values
 states:        optional extra state channels
+```
+
+### `fluid_scene.json`
+
+Stores static fluid-scene information: grid size, world extent, frame settings, solver settings, initial disturbances, and obstacles.
+
+### `fields.npz`
+
+Stores dense per-frame fluid arrays.
+
+```text
+height:    (T, H, W)  # water surface displacement
+velocity:  (T, H, W)  # estimated vertical velocity
+mask:      (H, W)     # solid obstacle cells
 ```
 
 ### `events.jsonl`
