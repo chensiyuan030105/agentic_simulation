@@ -10,6 +10,8 @@ A second independent fluid demo is also implemented. It uses a deterministic 2D 
 
 A third SPH dam-break demo is implemented for a `1 x 1 x 1` box. It uses a small deterministic CPU WCSPH-style particle simulator, exports particle trajectories, and renders the particles as animated water spheres in Blender.
 
+A fourth visual-first Mantaflow dam-break demo is implemented directly inside Blender. It uses Blender's built-in liquid solver to bake a free-surface liquid mesh and render a more natural-looking water animation, without exporting particle simulation arrays.
+
 Blender 5.1.0 has been downloaded and validated at:
 
 ```text
@@ -22,7 +24,7 @@ The local system was missing `libxkbcommon.so.0`, so the render config prepends 
 /ssd/data/anaconda3/lib
 ```
 
-The agent demo has been rendered successfully once, producing `scene.blend` and `preview.mp4` under `outputs/runs/demo_001/`. The fluid and SPH demos produce the same render artifact names under `outputs/runs/fluid_001/` and `outputs/runs/sph_dambreak_001/`.
+The agent demo has been rendered successfully once, producing `scene.blend` and `preview.mp4` under `outputs/runs/demo_001/`. The fluid, SPH, and Mantaflow demos produce the same render artifact names under their run directories.
 
 ## Quick Start
 
@@ -150,6 +152,27 @@ outputs/runs/sph_dambreak_001/preview.mp4
 
 The current SPH solver is a compact CPU implementation intended for scene prototyping, not a production fluid solver. It uses uniform-grid neighbor search, Poly6 density estimation, Spiky pressure forces, viscosity, gravity, and damped collision against the six walls of the unit box. The default run has `396` particles, `120` frames, and no out-of-bounds particles.
 
+## Mantaflow Dam-Break Demo
+
+Bake and render a visual-first Blender liquid simulation:
+
+```bash
+python scripts/render_mantaflow_run.py \
+  --sim-config configs/sim/mantaflow_dambreak.yaml \
+  --render-config configs/render/blender_5_1.yaml \
+  --out outputs/runs/mantaflow_dambreak_001
+```
+
+The configured Mantaflow output is:
+
+```text
+outputs/runs/mantaflow_dambreak_001/scene.blend
+outputs/runs/mantaflow_dambreak_001/preview.mp4
+outputs/runs/mantaflow_dambreak_001/mantaflow_cache/
+```
+
+The default Mantaflow scene uses a `1 x 1 x 1` liquid domain, a left-side initial water block, collision borders, Blender-generated liquid mesh output, and a fixed camera. The first validated run uses `120` frames at `24` fps with `resolution_max: 96`; bake took about `40` seconds and produced a valid MP4. This pipeline is intended for visual quality, not for exporting SPH-like arrays such as density or pressure.
+
 ## Core Idea
 
 The project should be split into two independent layers:
@@ -186,6 +209,12 @@ SPH YAML config
   -> sph_scene.json + particles.npz + events.jsonl + metrics.json
   -> Blender 5.1 background render
   -> scene.blend + preview.mp4 + optional frames
+
+Mantaflow YAML config
+  -> Blender Mantaflow scene construction
+  -> Blender liquid bake cache
+  -> Blender 5.1 background render
+  -> scene.blend + preview.mp4
 ```
 
 Example command shape:

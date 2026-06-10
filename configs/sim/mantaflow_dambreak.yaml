@@ -1,0 +1,29 @@
+run_name: mantaflow_dambreak_001
+seed: 41
+
+world:
+  bounds: [1.0, 1.0, 1.0]
+  frames: 120
+  fps: 24
+
+liquid:
+  block_min: [0.06, 0.06, 0.04]
+  block_max: [0.38, 0.74, 0.58]
+
+solver:
+  resolution_max: 96
+  time_scale: 1.0
+  cfl_condition: 4.0
+  timesteps_min: 1
+  timesteps_max: 4
+  flip_ratio: 0.97
+  particle_radius: 1.0
+  mesh_particle_radius: 1.35
+  mesh_smoothen_pos: 2
+  mesh_smoothen_neg: 2
+
+render:
+  save_blend: true
+  render_mp4: true
+  blend_name: scene.blend
+  video_name: preview.mp4
